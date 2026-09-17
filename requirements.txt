@@ -1,6 +1,7 @@
 numpy>=1.24
 torch>=2.2
-# Optional for audio I/O and export support
-# torchaudio>=2.2
-# onnx>=1.15
-# onnxruntime>=1.17
+torchaudio>=2.2
+soundfile>=0.12
+onnx>=1.15
+onnxruntime>=1.17
+pytest>=8.0

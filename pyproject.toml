@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-noise-cancel-dtln"
 version = "0.1.0"
-description = "PyTorch-based DTLN AI noise cancellation pipeline"
+description = "PyTorch-based DTLN AI noise cancellation pipeline with synthetic data mixing, perceptual losses, streaming inference, ONNX/TensorRT export, and Jetson deployment support."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "vijayakumar-cmd" }]
@@ -13,17 +13,27 @@ license = { text = "MIT" }
 dependencies = [
   "numpy>=1.24",
   "torch>=2.2",
-  "torchaudio>=2.2; platform_system != 'Windows'"
+  "torchaudio>=2.2; platform_system != 'Windows'",
+  "soundfile>=0.12",
 ]
 
 [project.optional-dependencies]
+train = [
+  "tensorboard>=2.16",
+]
 export = [
   "onnx>=1.15",
-  "onnxruntime>=1.17"
+  "onnxruntime>=1.17",
 ]
+
+[project.scripts]
+ai-noise-cancel = "ai_noise_cancel_dtln.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

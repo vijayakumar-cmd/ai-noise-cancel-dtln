@@ -1,36 +1,39 @@
 # AI Noise Cancel DTLN
 
-PyTorch-based DTLN AI noise cancellation pipeline for synthetic data generation, model training, streaming inference, ONNX export, and Jetson-friendly deployment.
+PyTorch-based DTLN AI noise cancellation pipeline for synthetic data mixing, perceptual losses, streaming inference, ONNX/TensorRT export, and Jetson deployment support.
 
 ## Features
 
-- Synthetic noise + speech mixture generation
-- Lightweight DTLN-style model in PyTorch
-- Training loop with configurable hyperparameters
+- Synthetic data generator for noisy speech-like waveforms
+- Compact DTLN-inspired denoising model in PyTorch
+- Perceptual + spectral loss training objective
 - Streaming inference with overlap-add buffering
-- ONNX export workflow
+- ONNX export tooling
 - TensorRT export entry point for NVIDIA deployment
-- Jetson deployment notes and config
+- Jetson deployment notes and helper scripts
+- CLI for training, inference, export, and demo workflows
 
-## Project structure
+## Repository layout
 
-- `src/ai_noise_cancel_dtln/` - Python package
-- `tests/` - basic validation tests
-- `README.md` - project documentation
+- `src/ai_noise_cancel_dtln/` — Python package
+- `tests/` — smoke tests and validation
+- `scripts/` — deployment and benchmarking helpers
+- `docs/` — deployment notes
+- `examples/` — sample usage scripts
 
 ## Quick start
 
-1. Create a virtual environment and install dependencies.
+1. Create a virtual environment.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -U pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
 ```
 
-2. Train the model.
+2. Train a model.
 
 ```bash
 python -m ai_noise_cancel_dtln.cli train --epochs 10 --batch-size 8 --output-dir checkpoints
@@ -48,41 +51,59 @@ python -m ai_noise_cancel_dtln.cli infer --model-path checkpoints/dtln.pt --samp
 python -m ai_noise_cancel_dtln.cli export --model-path checkpoints/dtln.pt --onnx-path checkpoints/dtln.onnx
 ```
 
-## Model overview
+5. Run a demo script.
 
-The project implements a compact DTLN-inspired architecture:
+```bash
+python examples/quick_demo.py
+```
 
-- 1D convolutional encoder
-- LSTM bottleneck
-- 1D convolutional decoder
-- residual skip connection for stable training
+## Model architecture
 
-This design keeps inference efficient while allowing real-time enhancement on embedded devices.
+The package implements a compact DTLN-inspired pipeline:
 
-## Synthetic dataset
+- Temporal encoder using 1D convolutional layers
+- LSTM bottleneck for temporal modeling
+- Decoder with residual enhancement path
+- Learned denoising with waveform regression objective
 
-The built-in dataset synthesizes:
+## Loss design
 
-- speech-like tones and amplitude modulated carriers
-- background noise with Gaussian and colored components
-- impulsive bursts and low-frequency hum
+The training pipeline uses a combined objective:
 
-This makes the project useful as a baseline development pipeline even without a real labeled dataset.
+- L1 waveform loss
+- MSE waveform loss
+- Spectral magnitude loss
+- Optional perceptual-style aggregation of waveform + spectral components
 
-## Jetson deployment notes
+This gives a more stable training signal than pure samplewise loss alone.
 
-For NVIDIA Jetson platforms:
+## Streaming inference
 
-- export the model to ONNX first
-- convert to TensorRT using `trtexec`
-- use FP16/INT8 mixed precision when supported
-- keep inference buffers small for low-latency streaming
+Streaming inference is handled by a `StreamingEnhancer` class that keeps a partial buffer, processes fixed frames, and merges results via overlap-add. This makes it suitable for real-time or low-latency enhancement pipelines.
+
+## Export workflow
+
+- Export ONNX with `torch.onnx.export`
+- Optionally convert to TensorRT with `trtexec`
+- Keep model weights compatible with Jetson and embedded inference stacks
 
 Example:
 
 ```bash
 trtexec --onnx=checkpoints/dtln.onnx --saveEngine=checkpoints/dtln.engine --fp16 --workspace=4096
 ```
+
+## Jetson deployment notes
+
+For NVIDIA Jetson devices:
+
+- export to ONNX first
+- convert to TensorRT with `trtexec`
+- prefer FP16 for throughput
+- keep frame sizes small for ultra-low latency
+- validate with short real-world audio clips before deployment
+
+See `docs/jetson.md` and `scripts/jetson_export.sh`.
 
 ## License
 
