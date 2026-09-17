@@ -1,0 +1,52 @@
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+
+
+class SyntheticNoiseDataset(Dataset):
+    """Generate speech-like and noise-like synthetic audio segments."""
+
+    def __init__(
+        self,
+        num_samples: int = 1024,
+        sample_rate: int = 16000,
+        sample_length: int = 16000,
+        noise_scale: float = 0.8,
+    ):
+        self.num_samples = num_samples
+        self.sample_rate = sample_rate
+        self.sample_length = sample_length
+        self.noise_scale = noise_scale
+
+    def __len__(self):
+        return self.num_samples
+
+    def _generate_clean_signal(self, length: int, sr: int) -> np.ndarray:
+        t = np.linspace(0.0, length / sr, length, endpoint=False)
+        voiced = 0.8 * np.sin(2 * np.pi * 220.0 * t)
+        voiced += 0.35 * np.sin(2 * np.pi * 330.0 * t + 0.7)
+        voiced += 0.25 * np.sin(2 * np.pi * 440.0 * t + 1.3)
+
+        envelope = 0.5 + 0.5 * np.sin(2 * np.pi * 2.7 * t + 0.4)
+        envelope *= 0.5 + 0.5 * np.exp(-((t - 0.35) ** 2) / 0.04)
+        clean = voiced * envelope
+        return clean.astype(np.float32)
+
+    def _generate_noise(self, length: int, sr: int) -> np.ndarray:
+        rng = np.random.default_rng()
+        base = rng.normal(0.0, 1.0, size=length).astype(np.float32)
+        colored = np.convolve(base, np.linspace(1.0, 0.1, 32), mode="same")
+        hum = 0.15 * np.sin(2 * np.pi * 60.0 * np.linspace(0.0, length / sr, length, endpoint=False))
+        impulses = np.zeros(length, dtype=np.float32)
+        impulse_positions = rng.integers(0, length, size=max(1, length // 1000))
+        impulses[impulse_positions] = rng.uniform(0.3, 0.9, size=len(impulse_positions))
+        return (0.6 * base + 0.4 * colored + hum + impulses).astype(np.float32)
+
+    def __getitem__(self, idx):
+        clean = self._generate_clean_signal(self.sample_length, self.sample_rate)
+        noise = self._generate_noise(self.sample_length, self.sample_rate)
+        gain = float(np.random.uniform(0.25, 1.5))
+        noisy = clean + gain * self.noise_scale * noise
+        noisy = noisy / (np.max(np.abs(noisy)) + 1e-8)
+        clean = clean / (np.max(np.abs(clean)) + 1e-8)
+        return torch.tensor(noisy, dtype=torch.float32), torch.tensor(clean, dtype=torch.float32)

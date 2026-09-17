@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-noise-cancel-dtln"
+version = "0.1.0"
+description = "PyTorch-based DTLN AI noise cancellation pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "vijayakumar-cmd" }]
+license = { text = "MIT" }
+dependencies = [
+  "numpy>=1.24",
+  "torch>=2.2",
+  "torchaudio>=2.2; platform_system != 'Windows'"
+]
+
+[project.optional-dependencies]
+export = [
+  "onnx>=1.15",
+  "onnxruntime>=1.17"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

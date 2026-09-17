@@ -1,0 +1,101 @@
+import argparse
+import os
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
+from .config import TrainConfig
+from .dataset import SyntheticNoiseDataset
+from .model import DTLN
+
+
+def set_seed(seed: int):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def train_model(config: TrainConfig):
+    set_seed(config.seed)
+    dataset = SyntheticNoiseDataset(
+        num_samples=config.num_samples,
+        sample_rate=config.sample_rate,
+        sample_length=config.sample_length,
+    )
+    loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
+    model = DTLN(hidden_dim=config.hidden_dim, kernel_size=config.kernel_size, lstm_layers=config.lstm_layers)
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+
+    output_dir = Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for epoch in range(config.epochs):
+        model.train()
+        total_loss = 0.0
+        for noisy, clean in loader:
+            optimizer.zero_grad()
+            pred = model(noisy)
+            loss = F.l1_loss(pred, clean) + 0.5 * F.mse_loss(pred, clean)
+            loss.backward()
+            optimizer.step()
+            total_loss += float(loss.item())
+
+        avg_loss = total_loss / max(1, len(loader))
+        print(f"epoch={epoch + 1}/{config.epochs} loss={avg_loss:.6f}")
+
+    checkpoint_path = output_dir / "dtln.pt"
+    torch.save({
+        "model_state": model.state_dict(),
+        "config": config,
+    }, checkpoint_path)
+    print(f"Saved model to {checkpoint_path}")
+    return checkpoint_path
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Train or run the DTLN denoiser")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    train_parser = subparsers.add_parser("train", help="Train a new model")
+    train_parser.add_argument("--epochs", type=int, default=10)
+    train_parser.add_argument("--batch-size", type=int, default=8)
+    train_parser.add_argument("--output-dir", type=str, default="checkpoints")
+    train_parser.add_argument("--sample-rate", type=int, default=16000)
+    train_parser.add_argument("--sample-length", type=int, default=16000)
+    train_parser.add_argument("--num-samples", type=int, default=256)
+    train_parser.add_argument("--learning-rate", type=float, default=1e-3)
+    train_parser.add_argument("--hidden-dim", type=int, default=64)
+    train_parser.add_argument("--kernel-size", type=int, default=5)
+    train_parser.add_argument("--lstm-layers", type=int, default=2)
+    train_parser.add_argument("--seed", type=int, default=42)
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "train":
+        config = TrainConfig(
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            output_dir=args.output_dir,
+            sample_rate=args.sample_rate,
+            sample_length=args.sample_length,
+            num_samples=args.num_samples,
+            learning_rate=args.learning_rate,
+            hidden_dim=args.hidden_dim,
+            kernel_size=args.kernel_size,
+            lstm_layers=args.lstm_layers,
+            seed=args.seed,
+        )
+        train_model(config)
+
+
+if __name__ == "__main__":
+    main()

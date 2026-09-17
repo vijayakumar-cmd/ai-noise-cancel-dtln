@@ -1,0 +1,65 @@
+import argparse
+import os
+from pathlib import Path
+
+import torch
+
+from .model import DTLN
+
+
+def export_onnx(model: DTLN, onnx_path: str, input_shape: tuple[int, int] = (1, 16000)):
+    model.eval()
+    dummy_input = torch.randn(*input_shape)
+    torch.onnx.export(
+        model,
+        dummy_input,
+        onnx_path,
+        export_params=True,
+        opset_version=17,
+        do_constant_folding=True,
+        input_names=["input_audio"],
+        output_names=["enhanced_audio"],
+    )
+    print(f"Exported ONNX model to {onnx_path}")
+    return onnx_path
+
+
+def export_tensorrt(onnx_path: str, engine_path: str, workspace_size_mb: int = 4096):
+    trtexec = "trtexec"
+    if not os.system(f"which {trtexec} >/dev/null 2>&1") == 0:
+        raise RuntimeError("TensorRT was not found on PATH. Install TensorRT or use the ONNX export only.")
+
+    cmd = [
+        trtexec,
+        f"--onnx={onnx_path}",
+        f"--saveEngine={engine_path}",
+        f"--workspace={workspace_size_mb}",
+        "--fp16",
+    ]
+    print("Running TensorRT export:", " ".join(cmd))
+    import subprocess
+
+    subprocess.run(cmd, check=True)
+    print(f"Saved TensorRT engine to {engine_path}")
+    return engine_path
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Export the DTLN model")
+    parser.add_argument("--model-path", type=str, default="checkpoints/dtln.pt", help="Path to a trained PyTorch checkpoint")
+    parser.add_argument("--onnx-path", type=str, default="checkpoints/dtln.onnx", help="Output ONNX file")
+    parser.add_argument("--engine-path", type=str, default="checkpoints/dtln.engine", help="Output TensorRT engine")
+    parser.add_argument("--tensorrt", action="store_true", help="Also export TensorRT if trtexec is available")
+    args = parser.parse_args()
+
+    checkpoint = torch.load(args.model_path, map_location="cpu")
+    model = DTLN()
+    model.load_state_dict(checkpoint["model_state"])
+    export_onnx(model, args.onnx_path)
+
+    if args.tensorrt:
+        export_tensorrt(args.onnx_path, args.engine_path)
+
+
+if __name__ == "__main__":
+    main()
